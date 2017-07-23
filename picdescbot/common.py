@@ -11,13 +11,18 @@ import re
 import requests
 import time
 import lxml.html
+import shutil
+import math
+import random
+import string
 from . import logger
 from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 log = logger.get("common")
 
 MEDIAWIKI_API = "https://commons.wikimedia.org/w/api.php"
-CVAPI = "https://api.projectoxford.ai/vision/v1.0/analyze"
+CVAPI = "https://eastus2.api.cognitive.microsoft.com/vision/v1.0/analyze"
 
 HEADERS = {"User-Agent":  "picdescbot, http://github.com/elad661/picdescbot"}
 
@@ -146,11 +151,12 @@ def get_picture(filename=None):
     response = requests.get(MEDIAWIKI_API,
                             params=params,
                             headers=HEADERS).json()
+  
     page = list(response['query']['pages'].values())[0]  # This API is ugly
     imageinfo = page['imageinfo'][0]
+    print(imageinfo)
     url = imageinfo['url']
     extra_metadata = imageinfo['extmetadata']
-
     # check that the file is actually a picture
     if imageinfo['mediatype'] != "BITMAP":
         return None
@@ -216,6 +222,8 @@ def get_picture(filename=None):
                 return None
     return imageinfo
 
+def get_barrl_picture:
+    pass
 
 class CVAPIClient(object):
     "Microsoft Cognitive Services Client"
@@ -275,7 +283,7 @@ class CVAPIClient(object):
                 url = pic['thumburl']
 
             result = self.describe_picture(url)
-
+            print(result)
             if result is not None:
                 description = result['description']
                 adult = result['adult']
@@ -287,7 +295,8 @@ class CVAPIClient(object):
                             if not tag_blacklisted(description['tags']):
                                 return Result(caption,
                                               description['tags'], url,
-                                              pic['descriptionshorturl'])
+                                              pic['descriptionshorturl'],
+                                              description['captions'][0]['confidence'])
                             else:
                                 log_discarded(url, "tag blacklist", caption)
                                 log.warning('tags: %s' % description['tags'])
@@ -319,11 +328,12 @@ class NonClosingBytesIO(BytesIO):
 
 class Result(object):
     "Represents a picture and its description"
-    def __init__(self, caption, tags, url, source_url):
+    def __init__(self, caption, tags, url, source_url, confidence):
         self.caption = caption
         self.tags = tags
         self.url = url
         self.source_url = source_url
+        self.confidence = confidence
 
     def download_picture(self):
         "Returns a BytesIO object for an image URL"
@@ -342,7 +352,34 @@ class Result(object):
 
             if response is not None and response.status_code == 200:
                 picture = NonClosingBytesIO(response.content)
-                return picture
+                
+                background = Image.open(picture)
+                foreground = Image.open("logo.png")
+                back_width, back_height = background.size
+
+                lower = str(int(math.lgamma(self.confidence)*random.randint(10000,50000)))
+                upper = str(random.randint(int(lower),int(1.2*int(lower))))
+                s = "$" + lower + " - $" + upper
+
+                foreground.thumbnail((int(.1*back_width),int(.1*back_height)),Image.ANTIALIAS)
+                
+                fore_width, fore_height = foreground.size
+                print(self.confidence)
+      
+                ext = self.url.split(".")[-1]
+                ext = "jpeg" if ext == "jpg" else ext
+                background.paste(foreground, (int(.1*back_width), int(back_height-fore_height)), foreground)
+
+                draw = ImageDraw.Draw(background)
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", int(.025*back_height))
+                draw.rectangle([int(.1*back_width)+fore_width, int(back_height-fore_height),int(.9*back_width), int(back_height)], fill="blue", outline="blue")
+
+                draw.text((int(.1*back_width)+fore_width, int(back_height-fore_height)), string.capwords(self.caption), font=font)
+                draw.text((int(.1*back_width)+fore_width, int(back_height-.5*fore_height)), s, font=font)
+                
+                newio = NonClosingBytesIO() 
+                background.save(newio, format=ext)
+                return newio
             else:
                 log.error("Fetching picture failed: " + response.status_code)
                 retries += 1
