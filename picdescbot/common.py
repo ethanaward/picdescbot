@@ -154,7 +154,7 @@ def get_picture(filename=None):
   
     page = list(response['query']['pages'].values())[0]  # This API is ugly
     imageinfo = page['imageinfo'][0]
-    print(imageinfo)
+    #print(imageinfo)
     url = imageinfo['url']
     extra_metadata = imageinfo['extmetadata']
     # check that the file is actually a picture
@@ -222,8 +222,17 @@ def get_picture(filename=None):
                 return None
     return imageinfo
 
-def get_barrl_picture:
-    pass
+def get_barrl_picture(filename=None):
+     if filename is None:
+         with open("count.txt", "r") as f:
+             val = f.read()
+         next_val = str(int(val) + 1)
+         next_url = "http://barrl.net/pdimages/" + next_val + ".jpg"
+         with open("count.txt", "w") as f:
+             f.write(next_val)
+     else:
+         next_url = "http://barrl.net/pdimages/" + filename
+     return next_url
 
 class CVAPIClient(object):
     "Microsoft Cognitive Services Client"
@@ -267,20 +276,25 @@ class CVAPIClient(object):
 
         return result
 
-    def get_picture_and_description(self, filename=None, max_retries=20):
+    def get_picture_and_description(self, filename=None, antique=None , max_retries=20):
         "Get a picture and a description. Retries until a usable result is produced or max_retries is reached."
         pic = None
         retries = 0
+        print(antique)
         while retries <= max_retries:  # retry max 20 times, until we get something good
-            while pic is None:
-                pic = get_picture(filename)
-                if pic is None:
-                    # We got a bad picture, let's wait a bit to be polite to the API server
-                    time.sleep(1)
-            url = pic['url']
-            # Use a scaled-down image if the original is too big
-            if pic['size'] > 3000000 or pic['width'] > 8192 or pic['height'] > 8192:
-                url = pic['thumburl']
+            if antique is False:
+                while pic is None:
+                    pic = get_picture(filename)
+                    if pic is None:
+                        # We got a bad picture, let's wait a bit to be polite to the API server
+                        time.sleep(1)
+                url = pic['url']
+                # Use a scaled-down image if the original is too big
+                if pic['size'] > 3000000 or pic['width'] > 8192 or pic['height'] > 8192:
+                    url = pic['thumburl']
+            else:
+                url = get_barrl_picture(filename)
+                pic = {'descriptionshorturl': url}
 
             result = self.describe_picture(url)
             print(result)
@@ -367,7 +381,7 @@ class Result(object):
                 print(self.confidence)
       
                 ext = self.url.split(".")[-1]
-                ext = "jpeg" if ext == "jpg" else ext
+                ext = "jpeg" if ext == "jpg" or ext == "JPG" else ext
                 background.paste(foreground, (int(.1*back_width), int(back_height-fore_height)), foreground)
 
                 draw = ImageDraw.Draw(background)

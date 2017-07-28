@@ -31,6 +31,7 @@ def main():
     parser.add_argument('--disable-tag-blacklist', action="store_true")
     parser.add_argument('--wikimedia-filename', nargs='?', type=str,
                         default=None, help='Describe the specified picture from wikimedia, instead of a random one')
+    parser.add_argument('--antique', action="store_true")
     args = parser.parse_args()
     config_file = "config.ini"
     if args.config is not None:
@@ -109,7 +110,7 @@ def main():
 
     post = False
     while not post:
-        result = cvapi.get_picture_and_description(args.wikimedia_filename)
+        result = cvapi.get_picture_and_description(args.wikimedia_filename, args.antique)
         if args.manual:
             action = None
             print(result.url)
